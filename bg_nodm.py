@@ -1,9 +1,9 @@
 import time
 import os
 
-import utils.realtime_renderer as rtr
+import realtime_renderer as rtr
 
-from utils.tf_utils import *
+from tf_utils import *
 
 
 class mv3d():
@@ -11,7 +11,7 @@ class mv3d():
     def __init__(self, sess):
 
         self.sess = sess
-        self.batch_size = 64
+        self.batch_size = 2
         self.input_shape = [128, 128, 3]
         self.output_shape = [128, 128, 4]
         self.max_iter = 1000000
@@ -57,7 +57,7 @@ class mv3d():
         a1 = lrelu(linear_msra(a0, 64, "a1"))
         a2 = lrelu(linear_msra(a1, 64, "a2"))
 
-        concated = tf.concat(1, [e5, a2])
+        concated = tf.concat([e5, a2], 1, name="contro_concat")
 
         # joint processing
         a3 = lrelu(linear_msra(concated, 4096, "a3"))
@@ -82,17 +82,17 @@ class mv3d():
                                  5, 5, 2, 2, "d0"))
         self.gen = tf.nn.tanh(conv2d_msra(d0, 4, 3, 3, 1, 1, "d0_1"))
 
-        gt_cm = tf.slice(self.images2, [0, 0, 0, 0], [64, 128, 128, 3])
-        gt_sm = tf.slice(self.images2, [0, 0, 0, 3], [64, 128, 128, 1])
+        gt_cm = tf.slice(self.images2, [0, 0, 0, 0], [self.batch_size, 128, 128, 3])
+        gt_sm = tf.slice(self.images2, [0, 0, 0, 3], [self.batch_size, 128, 128, 1])
         sm = gt_sm
         gt_sm = gt_sm * 0.75
-        pr_cm = tf.slice(self.gen, [0, 0, 0, 0], [64, 128, 128, 3])
-        pr_sm = tf.slice(self.gen, [0, 0, 0, 3], [64, 128, 128, 1])
+        pr_cm = tf.slice(self.gen, [0, 0, 0, 0], [self.batch_size, 128, 128, 3])
+        pr_sm = tf.slice(self.gen, [0, 0, 0, 3], [self.batch_size, 128, 128, 1])
 
-        self.loss = euclidean_loss(tf.mul(gt_cm, sm), tf.mul(pr_cm, sm)) +\
+        self.loss = euclidean_loss(tf.multiply(gt_cm, sm), tf.multiply(pr_cm, sm)) +\
             0.1 * euclidean_loss(gt_sm, pr_sm)
 
-        self.training_summ = tf.scalar_summary("training_loss", self.loss)
+        self.training_summ = tf.summary.scalar("training_loss", self.loss)
 
         self.t_vars = tf.trainable_variables()
         self.saver = tf.train.Saver(max_to_keep=20)
@@ -106,7 +106,8 @@ class mv3d():
         pr_cm = tf.slice(gen, [0, 0, 0, 0], [self.batch_size, 128, 128, 3])
         pr_sm = tf.slice(gen, [0, 0, 0, 3], [self.batch_size, 128, 128, 1])
 
-        save_images(tf.mul(pr_cm, pr_sm*4.0/3.0).eval(session=self.sess),
+        # pu.db
+        save_images(tf.multiply(pr_cm, pr_sm*4.0/3.0).eval(session=self.sess),
                     [8, 8], path + "/output_%s.png" % (iter_num))
         save_images(gen[:, :, :, 3], [8, 8],
                     path + "/sm_%s.png" % (iter_num), False)
@@ -118,7 +119,7 @@ class mv3d():
                     path + '/tr_input_%s.png' % (iter_num))
 
     def test(self, global_iter):
-        self.test_iter = 19
+        self.test_iter = 5
         sm_path = os.path.join(self.test_samples_folder,
                                str(global_iter).zfill(8))
         if not os.path.exists(sm_path):
@@ -129,10 +130,16 @@ class mv3d():
                                               (i+1)*self.batch_size]
             cl_im = np.asarray(self.test_images2[i*self.batch_size:
                                (i+1)*self.batch_size])
-            dm_im = np.asarray(self.test_dm2[i*self.batch_size:
-                               (i+1)*self.batch_size]).reshape(
-                               (self.batch_size, 128, 128, 1))
-            batch_images2 = np.concatenate((cl_im, dm_im), axis=3)
+            try:
+                dm_im = np.asarray(self.test_dm2[i*self.batch_size:
+                                   (i+1)*self.batch_size]).reshape(
+                                   (self.batch_size, 128, 128, 1))
+            except:
+                pu.db
+            try:
+                batch_images2 = np.concatenate((cl_im, dm_im), axis=3)
+            except:
+                pu.db
             batch_labels = self.test_labels[i*self.batch_size:
                                             (i+1)*self.batch_size]
             output = self.sess.run([self.gen, self.loss],
@@ -148,8 +155,8 @@ class mv3d():
         total_loss = local_loss / self.test_iter
         print("[i: %s] [test loss: %.6f]" %
               (global_iter, total_loss))
-        if self.writer is not None:
-            log_value(self.writer, total_loss, 'test_loss', global_iter)
+        # if self.writer is not None:
+        #     log_value(self.writer, total_loss, 'test_loss', global_iter)
 
     def train(self):
         optim = tf.train.AdamOptimizer(
@@ -206,6 +213,7 @@ global_start_time = time.time()
 with tf.Session() as sess:
     net = mv3d(sess)
     net.buildModel()
+    # pu.db
 
     # ---TEST---
     net.restore()

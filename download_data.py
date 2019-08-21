@@ -1,6 +1,10 @@
 import os
 import zipfile
+import ssl
 
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
 
 data_url = "http://lmb.informatik.uni-freiburg.de/\
 resources/binaries/eccv_2016_cars/data.zip"
@@ -29,13 +33,13 @@ def download_and_unpack(url, dest):
     if not os.path.exists(dest):
         try:
             import urllib
-            urllib.urlretrieve('http://google.com')
+            urllib.urlretrieve('http://google.com', context=ctx)
         except AttributeError:
             import urllib.request as urllib
         print("downloading " + dest + " ...")
 
         archive_name = dest + ".zip"
-        urllib.urlretrieve(url, archive_name)
+        urllib.urlretrieve(url, archive_name, context=ctx)
         in_file = open(archive_name, 'rb')
         z = zipfile.ZipFile(in_file)
         for name in z.namelist():

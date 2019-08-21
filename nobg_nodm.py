@@ -2,9 +2,9 @@ import time
 import os
 import sys
 
-import utils.realtime_renderer as rtr
+import realtime_renderer as rtr
 
-from utils.tf_utils import *
+from tf_utils import *
 
 
 class mv3d():
@@ -182,8 +182,8 @@ with tf.Session() as sess:
     net.buildModel()
 
     # ---TEST---
-    # net.restore()
-    # net.test(0)
+    net.restore()
+    net.test(0)
 
     # ---TRAIN---
-    net.train()
+    # net.train()
